@@ -5,6 +5,7 @@ namespace BasilLangevin\LaravelDataJsonSchemas\Actions;
 use BasilLangevin\LaravelDataJsonSchemas\Actions\Concerns\Runnable;
 use BasilLangevin\LaravelDataJsonSchemas\Schemas\ArraySchema;
 use BasilLangevin\LaravelDataJsonSchemas\Schemas\Contracts\Schema;
+use BasilLangevin\LaravelDataJsonSchemas\Schemas\NullSchema;
 use BasilLangevin\LaravelDataJsonSchemas\Schemas\StringSchema;
 use BasilLangevin\LaravelDataJsonSchemas\Schemas\UnionSchema;
 use BasilLangevin\LaravelDataJsonSchemas\Support\PropertyWrapper;
@@ -21,7 +22,14 @@ class TransformPropertyToSchema
     public function handle(PropertyWrapper $property, SchemaTree $tree): Schema
     {
         if ($property->isDataObject()) {
-            return TransformDataClassToSchema::run($property->getDataClassName(), $tree);
+            $schema = TransformDataClassToSchema::run($property->getDataClassName(), $tree);
+
+            if ($property->isNullable()) {
+                return UnionSchema::make()
+                    ->buildConstituentSchemasFromSchemas(collect([$schema, NullSchema::make()]));
+            }
+
+            return $schema;
         }
 
         return MakeSchemaForReflectionType::run($property->getReflectionType())

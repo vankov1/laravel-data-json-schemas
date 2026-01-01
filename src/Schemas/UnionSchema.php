@@ -88,6 +88,22 @@ class UnionSchema implements Schema
         return $this;
     }
 
+    /**
+     * Build constituent schemas from pre-built Schema objects.
+     *
+     * @param  Collection<int, SingleTypeSchema>  $schemas
+     */
+    public function buildConstituentSchemasFromSchemas(Collection $schemas): static
+    {
+        $this->constituentSchemas = $schemas;
+
+        if (! $this->canBeConsolidated()) {
+            $this->constituentSchemas->each->applyType();
+        }
+
+        return $this;
+    }
+
     protected function makeConstituentSchema(ReflectionNamedType $type, SchemaTree $tree): SingleTypeSchema
     {
         if (is_subclass_of($type->getName(), Data::class)) {

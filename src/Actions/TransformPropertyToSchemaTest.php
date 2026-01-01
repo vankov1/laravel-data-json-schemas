@@ -10,6 +10,7 @@ use BasilLangevin\LaravelDataJsonSchemas\Actions\TransformPropertyToSchema;
 use BasilLangevin\LaravelDataJsonSchemas\Enums\Format;
 use BasilLangevin\LaravelDataJsonSchemas\Schemas\ObjectSchema;
 use BasilLangevin\LaravelDataJsonSchemas\Schemas\StringSchema;
+use BasilLangevin\LaravelDataJsonSchemas\Schemas\UnionSchema;
 use BasilLangevin\LaravelDataJsonSchemas\Support\PropertyWrapper;
 use BasilLangevin\LaravelDataJsonSchemas\Support\SchemaTree;
 use BasilLangevin\LaravelDataJsonSchemas\Tests\Integration\DataClasses\PersonData;
@@ -41,6 +42,7 @@ class PropertyTransformActionTest extends Data
         public CarbonInterface $testCarbonInterface,
         public Carbon $testCarbon,
         public PersonData $dataObjectProperty,
+        public ?PersonData $nullableDataObjectProperty,
     ) {}
 }
 
@@ -128,4 +130,32 @@ it('calls the ApplyRequiredToDataObjectSchema action when the property is a data
 
     $action = new TransformPropertyToSchema;
     $action->handle($property, $this->tree);
+});
+
+it('returns a UnionSchema for nullable data object properties', function () {
+    $property = PropertyWrapper::make(PropertyTransformActionTest::class, 'nullableDataObjectProperty');
+
+    $action = new TransformPropertyToSchema;
+    $schema = $action->handle($property, $this->tree);
+
+    expect($schema)->toBeInstanceOf(UnionSchema::class);
+});
+
+it('includes null type in anyOf for nullable data objects', function () {
+    $property = PropertyWrapper::make(PropertyTransformActionTest::class, 'nullableDataObjectProperty');
+
+    $action = new TransformPropertyToSchema;
+    $schema = $action->handle($property, $this->tree);
+
+    $array = $schema->toArray();
+
+    expect($array)->toHaveKey('anyOf')
+        ->and($array['anyOf'])->toHaveCount(2);
+
+    // Check that one is object (or $ref to object) and one is null
+    $hasObjectOrRef = collect($array['anyOf'])->contains(fn ($item) => isset($item['$ref']) || (isset($item['type']) && $item['type'] === 'object'));
+    $hasNull = collect($array['anyOf'])->contains(fn ($item) => isset($item['type']) && $item['type'] === 'null');
+
+    expect($hasObjectOrRef)->toBeTrue()
+        ->and($hasNull)->toBeTrue();
 });
