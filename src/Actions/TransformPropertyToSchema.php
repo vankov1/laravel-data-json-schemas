@@ -34,11 +34,35 @@ class TransformPropertyToSchema
 
         return MakeSchemaForReflectionType::run($property->getReflectionType())
             ->pipe(fn (Schema $schema) => SetupSchema::run($schema, $property, $tree))
+            ->pipe(fn (Schema $schema) => ApplySchemaTypeOverride::run($schema, $property))
             ->pipe(fn (Schema $schema) => ApplyAnnotationsToSchema::run($schema, $property))
             ->when($property->isEnum(), fn (Schema $schema) => ApplyEnumToSchema::run($schema, $property))
             ->when($property->isDateTime(), fn (StringSchema|UnionSchema $schema) => ApplyDateTimeFormatToSchema::run($schema))
-            ->when($property->isArray(), fn (ArraySchema|UnionSchema $schema) => ApplyArrayItemsToSchema::run($schema, $property, $tree))
+            ->pipe(fn (Schema $schema) => $this->shouldApplyArrayItems($schema, $property)
+                ? ApplyArrayItemsToSchema::run($schema, $property, $tree)
+                : $schema)
             ->pipe(fn (Schema $schema) => ApplyRuleConfigurationsToSchema::run($schema, $property))
             ->tree($tree);
+    }
+
+    /**
+     * Determine if array items should be applied to the schema.
+     */
+    protected function shouldApplyArrayItems(Schema $schema, PropertyWrapper $property): bool
+    {
+        if (! $property->isArray()) {
+            return false;
+        }
+
+        if ($schema instanceof ArraySchema) {
+            return true;
+        }
+
+        if ($schema instanceof UnionSchema) {
+            return $schema->getConstituentSchemas()
+                ->contains(fn ($s) => $s instanceof ArraySchema);
+        }
+
+        return false;
     }
 }

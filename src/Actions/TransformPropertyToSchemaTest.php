@@ -5,10 +5,13 @@ use BasilLangevin\LaravelDataJsonSchemas\Actions\ApplyEnumToSchema;
 use BasilLangevin\LaravelDataJsonSchemas\Actions\ApplyPropertiesToDataObjectSchema;
 use BasilLangevin\LaravelDataJsonSchemas\Actions\ApplyRequiredToDataObjectSchema;
 use BasilLangevin\LaravelDataJsonSchemas\Actions\ApplyRuleConfigurationsToSchema;
+use BasilLangevin\LaravelDataJsonSchemas\Actions\ApplySchemaTypeOverride;
 use BasilLangevin\LaravelDataJsonSchemas\Actions\SetupSchema;
 use BasilLangevin\LaravelDataJsonSchemas\Actions\TransformPropertyToSchema;
+use BasilLangevin\LaravelDataJsonSchemas\Attributes\SchemaType;
 use BasilLangevin\LaravelDataJsonSchemas\Enums\Format;
 use BasilLangevin\LaravelDataJsonSchemas\Schemas\ObjectSchema;
+use BasilLangevin\LaravelDataJsonSchemas\Schemas\SimpleObjectSchema;
 use BasilLangevin\LaravelDataJsonSchemas\Schemas\StringSchema;
 use BasilLangevin\LaravelDataJsonSchemas\Schemas\UnionSchema;
 use BasilLangevin\LaravelDataJsonSchemas\Support\PropertyWrapper;
@@ -158,4 +161,47 @@ it('includes null type in anyOf for nullable data objects', function () {
 
     expect($hasObjectOrRef)->toBeTrue()
         ->and($hasNull)->toBeTrue();
+});
+
+class SchemaTypeOverrideTest extends Data
+{
+    public function __construct(
+        #[SchemaType('object')]
+        public array $headers,
+
+        #[SchemaType('object')]
+        public ?array $nullableHeaders,
+    ) {}
+}
+
+it('calls the ApplySchemaTypeOverride action', function () {
+    $property = PropertyWrapper::make(SchemaTypeOverrideTest::class, 'headers');
+
+    $mock = $this->mock(ApplySchemaTypeOverride::class);
+
+    $mock->shouldReceive('handle')->once()
+        ->andReturn(SimpleObjectSchema::make()->applyType());
+
+    $action = new TransformPropertyToSchema;
+    $action->handle($property, $this->tree);
+});
+
+it('transforms array property with SchemaType object to SimpleObjectSchema', function () {
+    $property = PropertyWrapper::make(SchemaTypeOverrideTest::class, 'headers');
+
+    $action = new TransformPropertyToSchema;
+    $schema = $action->handle($property, $this->tree);
+
+    expect($schema)->toBeInstanceOf(SimpleObjectSchema::class);
+    expect($schema->toArray())->toEqual(['type' => 'object']);
+});
+
+it('transforms nullable array property with SchemaType object to consolidated union', function () {
+    $property = PropertyWrapper::make(SchemaTypeOverrideTest::class, 'nullableHeaders');
+
+    $action = new TransformPropertyToSchema;
+    $schema = $action->handle($property, $this->tree);
+
+    expect($schema)->toBeInstanceOf(UnionSchema::class);
+    expect($schema->toArray())->toEqual(['type' => ['object', 'null']]);
 });
